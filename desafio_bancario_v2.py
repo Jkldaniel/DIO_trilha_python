@@ -1,6 +1,5 @@
-from datetime import date
+from datetime import date, datetime
 import textwrap
-from datetime import datetime
 
 class PessoaFisica:
     def __init__(self, cpf: str, nome: str, data_nascimento: date):
@@ -15,8 +14,11 @@ class Cliente(PessoaFisica):
         self.contas = []
 
     def realizar_transacao(self, conta, transacao):
+        if isinstance(transacao, Deposito):
+            conta.depositar(transacao.valor)
+        elif isinstance(transacao, Saque):
+            conta.sacar(transacao.valor)
         conta.historico.adicionar_transacao(transacao)
-        transacao.registrar(conta)
 
     def adicionar_conta(self, conta):
         self.contas.append(conta)
@@ -29,6 +31,7 @@ class Conta:
         self.cliente = cliente
         self.historico = Historico()
 
+    @staticmethod
     def nova_conta(cliente, numero):
         return Conta(0, numero, "0001", cliente)
 
@@ -49,6 +52,14 @@ class ContaCorrente(Conta):
         super().__init__(saldo, numero, agencia, cliente)
         self.limite = limite
         self.limite_saques = limite_saques
+        self.numero_saques = 0
+
+    def sacar(self, valor: float):
+        if self.numero_saques < self.limite_saques and valor <= self.limite:
+            if super().sacar(valor):
+                self.numero_saques += 1
+                return True
+        return False
 
 class Historico:
     def __init__(self):
@@ -65,15 +76,9 @@ class Deposito(Transacao):
     def __init__(self, valor: float):
         self.valor = valor
 
-    def registrar(self, conta):
-        conta.depositar(self.valor)
-
 class Saque(Transacao):
     def __init__(self, valor: float):
         self.valor = valor
-
-    def registrar(self, conta):
-        conta.sacar(self.valor)
 
 def menu():
     menu = """\n
@@ -89,17 +94,30 @@ def menu():
     return input(textwrap.dedent(menu))
 
 def depositar(conta, valor):
+    if valor <= 0:
+        print("\n@@@ Valor de depósito inválido. @@@")
+        return
     transacao = Deposito(valor)
     conta.cliente.realizar_transacao(conta, transacao)
+    print("\n=== Depósito realizado com sucesso! ===")
 
 def sacar(conta, valor):
+    if valor <= 0:
+        print("\n@@@ Valor de saque inválido. @@@")
+        return
     transacao = Saque(valor)
-    conta.cliente.realizar_transacao(conta, transacao)
+    if conta.cliente.realizar_transacao(conta, transacao):
+        print("\n=== Saque realizado com sucesso! ===")
+    else:
+        print("\n@@@ Falha na operação de saque. Verifique saldo e limite. @@@")
 
 def exibir_extrato(conta):
     print("\n================ EXTRATO ================")
-    for transacao in conta.historico.transacoes:
-        print(f"{transacao.__class__.__name__}:\tR$ {transacao.valor:.2f}")
+    if not conta.historico.transacoes:
+        print("Não foram realizadas movimentações.")
+    else:
+        for transacao in conta.historico.transacoes:
+            print(f"{transacao.__class__.__name__}:\tR$ {transacao.valor:.2f}")
     print(f"\nSaldo:\t\tR$ {conta.saldo:.2f}")
     print("==========================================")
 
